@@ -1,0 +1,164 @@
+/* ===== 基础 ===== */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #f4f4f1;
+  color: #222;
+}
+
+#app {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+h1 { font-size: 22px; font-weight: 600; text-align: center; margin: 16px 0 24px; }
+h2 { font-size: 18px; font-weight: 600; margin: 0 0 12px; }
+
+.card {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.muted { color: #777; font-size: 13px; }
+
+/* ===== 按钮 ===== */
+button {
+  font: inherit;
+  font-size: 14px;
+  padding: 7px 14px;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+button:hover { background: #f0f0f0; }
+button.primary { background: #2f6fd6; border-color: #2f6fd6; color: #fff; }
+button.primary:hover { background: #2559b0; }
+button.chip { padding: 4px 10px; font-size: 13px; background: #e8f0fc; border-color: #c5d8f5; color: #1d4f9e; }
+
+/* ===== 顶部栏 ===== */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #555;
+}
+.topbar button { padding: 4px 10px; }
+
+/* ===== 首页两个大框 ===== */
+.big-box {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 28px 16px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  border: 1px solid #ccc;
+  background: #fff;
+}
+.big-box .title { font-size: 26px; font-weight: 600; }
+.big-box .sub { font-size: 13px; color: #777; margin-top: 4px; }
+
+/* ===== 选择页 ===== */
+.wrong-entry {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  border: 2px solid #e05252;
+  color: #c03030;
+  font-weight: 600;
+  padding: 12px 14px;
+}
+.range-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.range-row input[type=number] { width: 70px; padding: 6px; font-size: 15px; border: 1px solid #bbb; border-radius: 6px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.groups { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.groups button { padding: 8px 0; }
+.groups button.done { background: #e6f4ea; border-color: #8fca9f; color: #2a7a3d; }
+
+/* ===== 练习页 ===== */
+.center { text-align: center; }
+
+.play-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  font-size: 26px;
+  margin: 8px auto 16px;
+  display: block;
+}
+
+.zh-row { margin-bottom: 20px; display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; }
+.zh-text { font-size: 18px; color: #444; min-height: 24px; }
+
+/* FIB 字母格子 */
+.letters { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.letters input {
+  width: 30px;
+  height: 40px;
+  font-size: 22px;
+  text-align: center;
+  font-family: Consolas, monospace;
+  border: none;
+  border-bottom: 3px solid #999;
+  background: transparent;
+  outline: none;
+}
+.letters input:focus { border-bottom-color: #2f6fd6; }
+.letters .dash { font-size: 22px; line-height: 40px; }
+
+.right { color: #2a7a3d !important; border-bottom-color: #3aa154 !important; }
+.wrong { color: #c03030 !important; border-bottom-color: #e05252 !important; }
+
+.result { min-height: 26px; font-size: 16px; margin-bottom: 14px; }
+.result.ok { color: #2a7a3d; font-weight: 600; }
+.result.bad { color: #c03030; }
+
+.actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+
+/* WFD 句子 */
+.sentence { font-size: 19px; line-height: 2.6; text-align: left; margin-bottom: 12px; }
+.word {
+  display: inline-block;
+  padding: 0 3px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.word:hover { background: #eef3fb; }
+.word.picked { background: #ffe9a8; }
+
+.blank { display: inline-flex; flex-direction: column; align-items: center; vertical-align: baseline; line-height: 1.3; margin: 0 2px; }
+.blank input {
+  font: inherit;
+  text-align: center;
+  border: none;
+  border-bottom: 2px solid #888;
+  background: transparent;
+  outline: none;
+  padding: 2px 0;
+}
+.blank input:focus { border-bottom-color: #2f6fd6; }
+.blank .hint { font-size: 12px; color: #888; }
+.blank .answer { font-size: 13px; color: #2a7a3d; }
+
+/* 错词本列表 */
+.list-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid #eee;
+  font-size: 14px;
+}
+.list-row .en { flex: 1; }
+.list-row .zh { flex: 1; color: #777; }
+.list-row .cnt { color: #c03030; white-space: nowrap; }
