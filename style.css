@@ -192,3 +192,5 @@ button.chip { padding: 4px 10px; font-size: 13px; background: #e8f0fc; border-co
 .list-row .en { flex: 1; }
 .list-row .zh { flex: 1; color: #777; }
 .list-row .cnt { color: #c03030; white-space: nowrap; }
+
+.list-row .bad-word { color: #c03030; font-weight: 600; text-decoration: underline; }

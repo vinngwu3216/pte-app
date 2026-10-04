@@ -205,16 +205,21 @@ async function logout() {
   showLogin();
 }
 
-// 错词本格式：{ 编号: { count: 错了几次, streak: 连续对了几次 } }
+// 错词本格式：{ 编号: { count: 错了几次, streak: 连续对了几次, words: WFD 里填错的词 } }
 function getWrong(mode) {
   return load("pte_wrong_" + mode, {});
 }
 
-function recordAnswer(mode, num, correct) {
+function recordAnswer(mode, num, correct, wrongWords) {
   const wrong = getWrong(mode);
   if (!correct) {
     const old = wrong[num] || { count: 0, streak: 0 };
-    wrong[num] = { count: old.count + 1, streak: 0 };
+    // 把这次填错的词加进去（不重复）
+    const words = (old.words || []).slice();
+    (wrongWords || []).forEach(w => {
+      if (!words.includes(w)) words.push(w);
+    });
+    wrong[num] = { count: old.count + 1, streak: 0, words: words };
   } else if (wrong[num]) {
     wrong[num].streak += 1;
     // 连续对 2 次，从错词本移出
@@ -398,9 +403,19 @@ function showWrongList(mode) {
   let rows = "";
   nums.forEach(num => {
     const item = getItem(mode, num);
+    // WFD：句子里填错过的词标红
+    let text = esc(item[1]);
+    if (mode === "wfd") {
+      const badWords = wrong[num].words || [];
+      text = splitSentence(item[1]).map(t => {
+        const isBad = badWords.includes(t.word.toLowerCase());
+        const w = isBad ? `<span class="bad-word">${esc(t.word)}</span>` : esc(t.word);
+        return esc(t.pre) + w + esc(t.post);
+      }).join(" ");
+    }
     rows += `
       <div class="list-row">
-        <span class="en">${num}. ${esc(item[1])}</span>
+        <span class="en">${num}. ${text}</span>
         ${mode === "fib" ? `<span class="zh">${esc(item[2])}</span>` : ""}
         <span class="cnt">错 ${wrong[num].count} 次</span>
       </div>`;
@@ -460,11 +475,12 @@ function nextItem() {
 }
 
 // 第一次检查时记录对错（之后改对不算）
-function firstResult(correct) {
+// wrongWords：WFD 里填错的词，FIB 不用传
+function firstResult(correct, wrongWords) {
   if (!state.firstTry) return;
   state.firstTry = false;
   const num = state.list[state.index];
-  recordAnswer(state.mode, num, correct);
+  recordAnswer(state.mode, num, correct, wrongWords);
   if (correct) state.right += 1;
   else state.wrongNums.push(num);
 }
@@ -607,17 +623,33 @@ function renderFib() {
     }
   }
 
-  document.getElementById("show-answer").onclick = () => {
-    firstResult(false); // 看答案算错
-    typer.value = answer;
-    draw();
-    slotEls.forEach(el => {
-      el.classList.remove("wrong", "current");
-      el.classList.add("right");
-    });
-    result.textContent = "答案：" + word;
-    result.className = "result bad";
-    document.getElementById("zh").style.visibility = "visible";
+  // 显示答案 / 隐藏答案（隐藏后清空，自己再拼一次）
+  const answerBtn = document.getElementById("show-answer");
+  let answerShown = false;
+  answerBtn.onclick = () => {
+    if (!answerShown) {
+      firstResult(false); // 看答案算错
+      typer.value = answer;
+      draw();
+      slotEls.forEach(el => {
+        el.classList.remove("wrong", "current");
+        el.classList.add("right");
+      });
+      result.textContent = "答案：" + word;
+      result.className = "result bad";
+      document.getElementById("zh").style.visibility = "visible";
+      answerBtn.textContent = "隐藏答案";
+      answerShown = true;
+    } else {
+      typer.value = "";
+      slotEls.forEach(el => el.classList.remove("right", "wrong"));
+      draw();
+      result.textContent = "";
+      result.className = "result";
+      answerBtn.textContent = "显示答案";
+      answerShown = false;
+      typer.focus();
+    }
   };
 
   document.getElementById("next").onclick = nextItem;
@@ -775,14 +807,18 @@ function bindFillPhase(tokens) {
   function checkWfd() {
     const num = state.list[state.index];
     let allRight = true;
+    const wrongWords = []; // 这次填错的词
     inputs.forEach(input => {
       const answer = tokens[input.dataset.i].word.toLowerCase();
       const ok = input.value.trim().toLowerCase() === answer;
       input.classList.add(ok ? "right" : "wrong");
-      if (!ok) allRight = false;
+      if (!ok) {
+        allRight = false;
+        wrongWords.push(answer);
+      }
     });
 
-    firstResult(allRight);
+    firstResult(allRight, wrongWords);
 
     if (allRight) {
       result.textContent = "✓ 正确";
@@ -800,17 +836,33 @@ function bindFillPhase(tokens) {
 
   document.getElementById("check").onclick = checkWfd;
 
-  document.getElementById("show-answer").onclick = () => {
-    firstResult(false);
-    inputs.forEach(input => {
-      const answer = tokens[input.dataset.i].word;
-      const box = input.parentElement;
-      if (!box.querySelector(".answer")) {
-        box.insertAdjacentHTML("beforeend", `<span class="answer">${esc(answer)}</span>`);
-      }
-    });
-    result.textContent = "答案已显示在空下面";
-    result.className = "result bad";
+  // 显示答案 / 隐藏答案（隐藏后清空，自己再填一次）
+  const answerBtn = document.getElementById("show-answer");
+  let answerShown = false;
+  answerBtn.onclick = () => {
+    if (!answerShown) {
+      // 看答案算错：这几个空的词都记进错词本
+      firstResult(false, inputs.map(input => tokens[input.dataset.i].word.toLowerCase()));
+      inputs.forEach(input => {
+        const answer = tokens[input.dataset.i].word;
+        input.parentElement.insertAdjacentHTML("beforeend", `<span class="answer">${esc(answer)}</span>`);
+      });
+      result.textContent = "答案已显示在空下面";
+      result.className = "result bad";
+      answerBtn.textContent = "隐藏答案";
+      answerShown = true;
+    } else {
+      app.querySelectorAll(".blank .answer").forEach(el => el.remove());
+      inputs.forEach(input => {
+        input.value = "";
+        input.classList.remove("right", "wrong");
+      });
+      result.textContent = "";
+      result.className = "result";
+      answerBtn.textContent = "显示答案";
+      answerShown = false;
+      if (inputs[0]) inputs[0].focus();
+    }
   };
 
   document.getElementById("repick").onclick = () => {
