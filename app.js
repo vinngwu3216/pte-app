@@ -512,18 +512,27 @@ function renderFib() {
   const num = state.list[state.index];
   const [, word, zh] = getItem("fib", num);
 
-  // 每个字母一个格子；"-" 直接显示
-  let boxes = "";
+  // 找出哪些位置是字母（"-" 这种符号直接显示，不用打）
+  const letterPos = [];
   for (let i = 0; i < word.length; i++) {
-    if (/[a-z]/i.test(word[i])) {
-      boxes += `<input maxlength="1" data-i="${i}" autocomplete="off" autocapitalize="off" spellcheck="false">`;
-    } else {
-      boxes += `<span class="dash">${esc(word[i])}</span>`;
-    }
+    if (/[a-z]/i.test(word[i])) letterPos.push(i);
+  }
+  const answer = letterPos.map(i => word[i].toLowerCase()).join("");
+
+  // 下划线格子只负责显示；真正打字的是一个看不见的输入框（盖在格子上面）
+  let slots = "";
+  let k = 0;
+  for (let i = 0; i < word.length; i++) {
+    if (/[a-z]/i.test(word[i])) slots += `<span class="slot" data-k="${k++}"></span>`;
+    else slots += `<span class="dash">${esc(word[i])}</span>`;
   }
 
   app.innerHTML = practiceHeader(num, zh, `FIB #${num} ·`) + `
-      <div class="letters" id="letters">${boxes}</div>
+      <div class="letters" id="letters">
+        ${slots}
+        <input id="typer" class="typer" maxlength="${answer.length}"
+          autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+      </div>
       <div class="result" id="result"></div>
       <div class="actions">
         <button id="show-answer">显示答案</button>
@@ -535,36 +544,40 @@ function renderFib() {
   bindHeader(word, 0.9);
   speak(word, 0.9); // 自动播放
 
-  const inputs = Array.from(app.querySelectorAll("#letters input"));
+  const typer = document.getElementById("typer");
+  const slotEls = Array.from(app.querySelectorAll("#letters .slot"));
   const result = document.getElementById("result");
-  inputs[0].focus();
+  typer.focus();
 
-  inputs.forEach((input, k) => {
-    input.oninput = () => {
-      input.value = input.value.slice(-1).toLowerCase();
-      input.classList.remove("right", "wrong");
-      result.textContent = "";
-      result.className = "result";
-      if (input.value && k < inputs.length - 1) inputs[k + 1].focus();
-      if (inputs.every(x => x.value)) checkFib();
-    };
-    input.onkeydown = e => {
-      if (e.key === "Backspace" && !input.value && k > 0) {
-        inputs[k - 1].value = "";
-        inputs[k - 1].classList.remove("right", "wrong");
-        inputs[k - 1].focus();
-        e.preventDefault();
-      }
-      if (e.key === "Enter") checkFib();
-    };
-  });
+  // 把输入框里的字母画到格子上
+  function draw() {
+    const typed = typer.value;
+    slotEls.forEach((el, i) => {
+      el.textContent = typed[i] || "";
+      el.classList.toggle("current", i === typed.length);
+    });
+  }
+
+  typer.oninput = () => {
+    // 只留小写字母，长度不超过单词长度
+    typer.value = typer.value.toLowerCase().replace(/[^a-z]/g, "").slice(0, answer.length);
+    slotEls.forEach(el => el.classList.remove("right", "wrong"));
+    result.textContent = "";
+    result.className = "result";
+    draw();
+    if (typer.value.length === answer.length) checkFib();
+  };
+
+  typer.onkeydown = e => {
+    if (e.key === "Enter") checkFib();
+  };
 
   function checkFib() {
-    let allRight = true;
-    inputs.forEach(input => {
-      const answer = word[input.dataset.i].toLowerCase();
-      const ok = input.value === answer;
-      input.classList.add(ok ? "right" : "wrong");
+    const typed = typer.value;
+    let allRight = typed.length === answer.length;
+    slotEls.forEach((el, i) => {
+      const ok = typed[i] === answer[i];
+      el.classList.add(ok ? "right" : "wrong");
       if (!ok) allRight = false;
     });
 
@@ -580,17 +593,20 @@ function renderFib() {
     } else {
       result.textContent = "✗ 红色字母错了，改一下再试";
       result.className = "result bad";
-      const firstWrong = inputs.find(x => x.classList.contains("wrong"));
-      if (firstWrong) firstWrong.select();
+      // 选中第一个错的字母，直接打就能替换它
+      const firstWrong = slotEls.findIndex(el => el.classList.contains("wrong"));
+      typer.focus();
+      if (firstWrong >= 0 && firstWrong < typed.length) typer.setSelectionRange(firstWrong, firstWrong + 1);
     }
   }
 
   document.getElementById("show-answer").onclick = () => {
     firstResult(false); // 看答案算错
-    inputs.forEach(input => {
-      input.value = word[input.dataset.i].toLowerCase();
-      input.classList.remove("wrong");
-      input.classList.add("right");
+    typer.value = answer;
+    draw();
+    slotEls.forEach(el => {
+      el.classList.remove("wrong", "current");
+      el.classList.add("right");
     });
     result.textContent = "答案：" + word;
     result.className = "result bad";
@@ -598,6 +614,7 @@ function renderFib() {
   };
 
   document.getElementById("next").onclick = nextItem;
+  draw();
 }
 
 // ================================================
@@ -641,7 +658,7 @@ function renderWfd(isNewSentence) {
       const hint = WORD_ZH[t.word.toLowerCase()] || "";
       const width = Math.max(t.word.length + 1, 4);
       sentenceHtml += `${esc(t.pre)}<span class="blank">
-          <input data-i="${i}" style="width:${width}ch" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <input data-i="${i}" style="width:${width}ch" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
           <span class="hint">${esc(hint)}</span>
         </span>${esc(t.post)} `;
     } else {
