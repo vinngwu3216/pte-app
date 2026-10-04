@@ -162,3 +162,16 @@ button.chip { padding: 4px 10px; font-size: 13px; background: #e8f0fc; border-co
 .list-row .en { flex: 1; }
 .list-row .zh { flex: 1; color: #777; }
 .list-row .cnt { color: #c03030; white-space: nowrap; }
+
+/* 登录页输入框 */
+.field { display: block; margin-bottom: 12px; font-size: 14px; color: #555; }
+.field input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  font-size: 16px;
+  border: 1px solid #bbb;
+  border-radius: 8px;
+}
+.field input:focus { outline: none; border-color: #2f6fd6; }

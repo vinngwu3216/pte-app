@@ -38,23 +38,171 @@ let state = {
 };
 
 // ================================================
-// 1. 本地存储（错词本、完成的分组、设置）
+// 1. 数据存储（存到 Supabase，手机电脑同步）
 // ================================================
+// 连接 Supabase（网址和密钥在 config.js）
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null; // 现在登录的用户
+let userData = {};      // 这个用户的所有数据：错词本、完成的分组、设置
+let saveTimer = null;   // 等一会儿再上传，避免每打一个字母都上传
+
+// 读数据（从内存里读）
 function load(key, defaultValue) {
-  try {
-    const text = localStorage.getItem(key);
-    return text ? JSON.parse(text) : defaultValue;
-  } catch (e) {
-    return defaultValue;
+  return key in userData ? userData[key] : defaultValue;
+}
+
+// 存数据：先改内存，0.8 秒后上传到 Supabase
+function save(key, value) {
+  userData[key] = value;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(syncNow, 800);
+}
+
+// 马上上传
+async function syncNow() {
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  if (!currentUser) return;
+  const { error } = await sb.from("user_data").upsert({
+    user_id: currentUser.id,
+    data: userData,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) console.error("同步失败", error);
+}
+
+// 从 Supabase 下载这个用户的数据
+async function fetchUserData() {
+  const { data, error } = await sb
+    .from("user_data")
+    .select("data")
+    .eq("user_id", currentUser.id)
+    .maybeSingle();
+  if (error) throw error;
+
+  if (data) {
+    userData = data.data || {};
+  } else {
+    // 第一次登录：把这台电脑浏览器里以前的错词本搬上去
+    userData = readOldLocalData();
+    await syncNow();
   }
 }
 
-function save(key, value) {
+// 读以前存在浏览器里的旧数据（只在第一次登录时用一次）
+function readOldLocalData() {
+  const old = {};
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key.startsWith("pte_")) old[key] = JSON.parse(localStorage.getItem(key));
+    }
   } catch (e) {
-    // 存不了就算了，不影响练习
+    // 读不到就算了
   }
+  return old;
+}
+
+// 切走页面时马上上传；切回来时重新下载（拿另一台设备的最新数据）
+document.addEventListener("visibilitychange", () => {
+  if (!currentUser) return;
+  if (document.visibilityState === "hidden") {
+    if (saveTimer) syncNow();
+  } else if (!saveTimer) {
+    fetchUserData().catch(e => console.error(e));
+  }
+});
+
+// ================================================
+// 1.5 登录页
+// ================================================
+function showLogin(message) {
+  app.innerHTML = `
+    <h1>PTE 拼写练习</h1>
+    <div class="card">
+      <h2>登录</h2>
+      <label class="field">邮箱
+        <input type="email" id="email" autocomplete="email">
+      </label>
+      <label class="field">密码
+        <input type="password" id="password" autocomplete="current-password">
+      </label>
+      <div class="result bad" id="login-msg">${esc(message || "")}</div>
+      <div class="actions">
+        <button class="primary" id="login">登录</button>
+        <button id="signup">注册新账号</button>
+      </div>
+      <p class="muted">第一次用，先填邮箱和密码，点"注册新账号"。密码至少 6 位。</p>
+    </div>
+  `;
+
+  const msg = document.getElementById("login-msg");
+  const getForm = () => ({
+    email: document.getElementById("email").value.trim(),
+    password: document.getElementById("password").value,
+  });
+
+  function check(form) {
+    if (!form.email || !form.password) {
+      msg.textContent = "请填写邮箱和密码。";
+      return false;
+    }
+    return true;
+  }
+
+  document.getElementById("login").onclick = async () => {
+    const form = getForm();
+    if (!check(form)) return;
+    msg.textContent = "登录中…";
+    const { data, error } = await sb.auth.signInWithPassword(form);
+    if (error) msg.textContent = translateError(error.message);
+    else afterLogin(data.user);
+  };
+
+  document.getElementById("signup").onclick = async () => {
+    const form = getForm();
+    if (!check(form)) return;
+    msg.textContent = "注册中…";
+    const { data, error } = await sb.auth.signUp(form);
+    if (error) msg.textContent = translateError(error.message);
+    else if (data.session) afterLogin(data.user);
+    else msg.textContent = "注册成功，请去邮箱确认后再登录。";
+  };
+
+  document.getElementById("password").onkeydown = e => {
+    if (e.key === "Enter") document.getElementById("login").click();
+  };
+}
+
+// 把常见的英文错误翻成中文
+function translateError(text) {
+  if (/invalid login credentials/i.test(text)) return "邮箱或密码不对。";
+  if (/already registered/i.test(text)) return "这个邮箱已经注册过了，直接点登录。";
+  if (/at least 6/i.test(text)) return "密码至少 6 位。";
+  if (/valid email|invalid format/i.test(text)) return "邮箱格式不对。";
+  return "出错了：" + text;
+}
+
+// 登录成功后：下载数据，进首页
+async function afterLogin(user) {
+  currentUser = user;
+  app.innerHTML = '<p class="muted center">加载中…</p>';
+  try {
+    await fetchUserData();
+    showHome();
+  } catch (e) {
+    console.error(e);
+    showLogin("数据加载失败，请再试一次。");
+  }
+}
+
+async function logout() {
+  await syncNow(); // 退出前先把没上传的数据传上去
+  await sb.auth.signOut();
+  currentUser = null;
+  userData = {};
+  showLogin();
 }
 
 // 错词本格式：{ 编号: { count: 错了几次, streak: 连续对了几次 } }
@@ -133,6 +281,10 @@ function showHome() {
   const wfdWrong = Object.keys(getWrong("wfd")).length;
 
   app.innerHTML = `
+    <div class="topbar">
+      <span>${esc(currentUser.email)}</span>
+      <button id="logout">退出登录</button>
+    </div>
     <h1>PTE 拼写练习</h1>
     <button class="big-box" id="go-fib">
       <div class="title">FIB</div>
@@ -145,6 +297,7 @@ function showHome() {
   `;
   document.getElementById("go-fib").onclick = () => showMenu("fib");
   document.getElementById("go-wfd").onclick = () => showMenu("wfd");
+  document.getElementById("logout").onclick = logout;
 }
 
 // ================================================
@@ -685,8 +838,15 @@ function showFinish() {
 }
 
 // ================================================
-// 启动：打开首页
+// 启动：已登录就进首页，没登录就进登录页
 // ================================================
 // 有些浏览器的语音列表要等一下才加载
 if ("speechSynthesis" in window) speechSynthesis.getVoices();
-showHome();
+
+async function start() {
+  app.innerHTML = '<p class="muted center">加载中…</p>';
+  const { data } = await sb.auth.getSession();
+  if (data.session) afterLogin(data.session.user);
+  else showLogin();
+}
+start();
