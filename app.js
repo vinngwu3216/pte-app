@@ -549,6 +549,14 @@ function renderFib() {
   const result = document.getElementById("result");
   typer.focus();
 
+  // 光标永远放在最后（手机上点格子会把光标放到中间，删除就会卡住）
+  function caretToEnd() {
+    const n = typer.value.length;
+    typer.setSelectionRange(n, n);
+  }
+  typer.onfocus = () => setTimeout(caretToEnd, 0);
+  typer.onclick = caretToEnd;
+
   // 把输入框里的字母画到格子上
   function draw() {
     const typed = typer.value;
@@ -564,6 +572,7 @@ function renderFib() {
     slotEls.forEach(el => el.classList.remove("right", "wrong"));
     result.textContent = "";
     result.className = "result";
+    caretToEnd();
     draw();
     if (typer.value.length === answer.length) checkFib();
   };
@@ -591,12 +600,10 @@ function renderFib() {
         if (state.list[state.index] === num && app.contains(result)) nextItem();
       }, 900);
     } else {
-      result.textContent = "✗ 红色字母错了，改一下再试";
+      result.textContent = "✗ 红色字母错了，删到那里重新打";
       result.className = "result bad";
-      // 选中第一个错的字母，直接打就能替换它
-      const firstWrong = slotEls.findIndex(el => el.classList.contains("wrong"));
       typer.focus();
-      if (firstWrong >= 0 && firstWrong < typed.length) typer.setSelectionRange(firstWrong, firstWrong + 1);
+      caretToEnd();
     }
   }
 
@@ -857,6 +864,14 @@ function showFinish() {
 // ================================================
 // 启动：已登录就进首页，没登录就进登录页
 // ================================================
+// 手机上光标被移到中间时，把它拉回最后
+document.addEventListener("selectionchange", () => {
+  const typer = document.getElementById("typer");
+  if (!typer || document.activeElement !== typer) return;
+  const n = typer.value.length;
+  if (typer.selectionStart !== n || typer.selectionEnd !== n) typer.setSelectionRange(n, n);
+});
+
 // 有些浏览器的语音列表要等一下才加载
 if ("speechSynthesis" in window) speechSynthesis.getVoices();
 
